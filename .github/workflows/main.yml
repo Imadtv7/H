@@ -1,85 +1,21 @@
-name: Facebook Live Streaming
+name: Facebook Live Stream
 
-on:
-  push:
-    branches:
-      - main  # أو الفرع الذي تريد أن يعمل عليه GitHub Action
+on: workflow_dispatch:
 
-jobs:
-  live_stream:
-    runs-on: ubuntu-latest  # نظام التشغيل الذي سيتم تشغيله عليه
+jobs: stream: runs-on: ubuntu-latest
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2  # استخدام الإجراء الرسمي لتحميل الكود
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v3
+  
+  - name: Install FFmpeg
+    run: |
+      sudo apt update
+      sudo apt install -y ffmpeg
+  
+  - name: Start Facebook Live Stream
+    run: |
+      ffmpeg -re -i "https://cdn.live.easybroadcast.io:443/abr_corp/73_aloula_w1dqfwm/corp/73_aloula_w1dqfwm_480p/chunks_dvr.m3u8" \
+      -c:v copy -c:a aac -strict experimental -f flv \
+      "rtmps://live-api-s.facebook.com:443/rtmp/FB-122173967522313606-0-Ab3DkZyaWlgD9gFvfLR8GWip"
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'  # تحديد إصدار Python
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests  # تثبيت مكتبة requests
-
-    - name: Install FFmpeg
-      run: |
-        sudo apt update
-        sudo apt install -y ffmpeg  # تثبيت FFmpeg للبث
-
-    - name: Run live stream script
-      env:
-        FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}  # الحصول على الـ page ID من secrets
-        FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}  # الحصول على الـ access token من secrets
-      run: |
-        python -c "
-import os
-import requests
-import subprocess
-
-# الحصول على page_id و access_token من البيئة
-page_id = os.getenv('316822688175157')
-access_token = os.getenv('FEAANxd4EhCy8BO1t1zpc5ujrU5irNWzvk1eCKyi5WD3klBHTLm1j9bCPZA4Po4TlwZAQzzVuTefOZAc8G4J9x1PqOXyZAIIimGgXuQLq4F3aMbrvfKiNVCiC0PGfg7Um2BIqtUZBp5HXIkBeZCTOKDBGVizX1LqQzDYPsuesQkqsZBUOgFquU0SEHNQHiCmKUCRv')
-
-# رابط API لجلب بيانات البث المباشر
-url = f'https://graph.facebook.com/{page_id}/live_videos?access_token={access_token}'
-
-# إرسال طلب GET لجلب بيانات البث
-response = requests.get(url)
-
-# التأكد من أن الطلب تم بنجاح
-if response.status_code == 200:
-    data = response.json()
-
-    # استخراج stream key من البيانات (افترض أن الـ stream_url هو الرابط الكامل)
-    if 'data' in data and len(data['data']) > 0:
-        stream_url = data['data'][0].get('stream_url', '')
-
-        if stream_url:
-            # استخراج stream key من الرابط (يفترض أن الرابط يحتوي على stream key)
-            stream_key = stream_url.split('/')[-1]  # استخراج آخر جزء من الرابط كـ stream key
-            print(f'Stream Key: {stream_key}')
-
-            # الرابط الذي يحتوي على m3u8
-            m3u8_url = 'https://prod-fastly-ap-northeast-1.video.pscp.tv/Transcoding/v1/hls/IN2UdCMRIFRZsQYxb8cmeWLdzCEM0NY8yHcWgANKU-ufl_8QwyQwfiOqvkb9LFB2qr9fUzMP8YJ2fFz8EUjKlA/non_transcode/ap-northeast-1/periscope-replay-direct-prod-ap-northeast-1-public/master_dynamic_highlatency.m3u8?type=live'
-
-            # بث الفيديو باستخدام ffmpeg
-            command = [
-                'ffmpeg',
-                '-i', m3u8_url,  # مدخل M3U8
-                '-c:v', 'libx264',  # ترميز الفيديو
-                '-c:a', 'aac',  # ترميز الصوت
-                '-f', 'flv',  # نوع البروتوكول
-                f'rtmp://live-api-s.facebook.com:80/rtmp/{stream_key}'  # الخادم و stream key
-            ]
-
-            # تنفيذ الأمر للبث
-            subprocess.run(command)
-        else:
-            print('لم يتم العثور على stream_url داخل البيانات.')
-    else:
-        print('لم يتم العثور على بيانات بث مباشر لصفحتك.')
-else:
-    print(f"فشل في جلب البيانات. الكود: {response.status_code}")
-        "
